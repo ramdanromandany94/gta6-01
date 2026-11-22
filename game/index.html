@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' fill='%23ff7a3c'/><text x='8' y='12' font-size='11' text-anchor='middle' fill='white'>V</text></svg>">
+<title>VICE SUNSET — Solmar Bay</title>
+<style>
+  html, body { margin: 0; padding: 0; overflow: hidden; background: #1a0f2e; height: 100%; font-family: 'Segoe UI', Arial, sans-serif; }
+  #game-canvas { display: block; width: 100vw; height: 100vh; }
+  #hud { position: fixed; inset: 0; pointer-events: none; color: #fff; z-index: 5; }
+  .panel { background: rgba(10, 12, 20, 0.62); border: 1px solid rgba(255,255,255,0.18); border-radius: 8px; padding: 6px 10px; }
+  #top-left { position: absolute; top: 12px; left: 12px; display: flex; flex-direction: column; gap: 6px; }
+  #health-bar { width: 220px; height: 14px; background: rgba(0,0,0,0.55); border-radius: 7px; overflow: hidden; border: 1px solid rgba(255,255,255,0.25); }
+  #health-fill { height: 100%; width: 100%; background: linear-gradient(90deg, #27ae60, #2ecc71); transition: width 0.2s; }
+  #health-text { font-size: 12px; color: #ddd; }
+  #money { font-size: 20px; font-weight: bold; color: #2ecc71; }
+  #stars { font-size: 22px; letter-spacing: 3px; }
+  #objective { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); font-size: 15px; text-align: center; max-width: 46vw; }
+  #dialog { position: absolute; bottom: 170px; left: 50%; transform: translateX(-50%); font-size: 16px; font-style: italic; text-align: center; max-width: 60vw; transition: opacity 0.3s; background: rgba(10,12,20,0.72); border-left: 4px solid #f39c12; padding: 10px 14px; border-radius: 6px; }
+  #toast { position: absolute; top: 120px; left: 50%; transform: translateX(-50%); font-size: 18px; font-weight: bold; color: #ffd23e; opacity: 0; transition: opacity 0.3s; text-shadow: 0 2px 6px #000; }
+  #speed { position: absolute; bottom: 206px; right: 18px; font-size: 26px; font-weight: bold; text-shadow: 0 2px 6px #000; }
+  #weapon { position: absolute; bottom: 12px; left: 12px; font-size: 13px; color: #ddd; }
+  #minimap-wrap { position: absolute; bottom: 12px; right: 12px; border: 2px solid rgba(255,255,255,0.35); border-radius: 6px; overflow: hidden; }
+  #minimap { display: block; width: 180px; height: 180px; }
+  #crosshair { position: absolute; top: 50%; left: 50%; width: 18px; height: 18px; margin: -9px 0 0 -9px; display: none; }
+  #crosshair::before, #crosshair::after { content: ''; position: absolute; background: #fff; box-shadow: 0 0 3px #000; }
+  #crosshair::before { left: 8px; top: 0; width: 2px; height: 18px; }
+  #crosshair::after { top: 8px; left: 0; width: 18px; height: 2px; }
+  #controls-hint { position: absolute; top: 56px; left: 50%; transform: translateX(-50%); font-size: 11px; color: rgba(255,255,255,0.65); text-align: center; max-width: 60vw; }
+  .overlay { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 10; color: #fff; text-align: center; }
+  #start-screen { background: linear-gradient(180deg, rgba(43,26,78,0.88), rgba(20,8,32,0.94)); }
+  #start-screen h1 { font-size: 64px; margin: 0; letter-spacing: 6px; color: #ff7a3c; text-shadow: 0 0 24px #ff5e3a, 0 4px 0 #7a2a12; font-style: italic; }
+  #start-screen h2 { font-size: 20px; margin: 4px 0 18px; color: #ffd23e; letter-spacing: 4px; }
+  #start-screen p { max-width: 560px; line-height: 1.6; color: #e8e0f0; }
+  #start-screen .keys { font-size: 14px; color: #c9b8e0; margin-top: 8px; line-height: 1.9; }
+  .big-btn { pointer-events: auto; cursor: pointer; margin-top: 22px; padding: 14px 44px; font-size: 20px; font-weight: bold; color: #1a0f2e; background: linear-gradient(180deg, #ffd23e, #f39c12); border: none; border-radius: 10px; box-shadow: 0 6px 0 #a86a00; }
+  .big-btn:active { transform: translateY(4px); box-shadow: 0 2px 0 #a86a00; }
+  #pause-screen, #wasted-screen { background: rgba(10, 8, 20, 0.78); display: none; }
+  #pause-screen h1, #wasted-screen h1 { font-size: 52px; margin: 0 0 10px; }
+  #wasted-screen h1 { color: #ff3b30; }
+  #loading { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; color: #fff; z-index: 20; background: #1a0f2e; font-size: 18px; }
+</style>
+<script type="importmap">
+{ "imports": { "three": "./vendor/three.module.min.js" } }
+</script>
+</head>
+<body>
+<div id="loading">Memuat Solmar Bay…</div>
+<canvas id="game-canvas"></canvas>
+<div id="hud">
+  <div id="top-left">
+    <div class="panel"><div id="health-bar"><div id="health-fill"></div></div><span id="health-text">100</span></div>
+    <div class="panel"><span id="money">$120</span></div>
+    <div class="panel"><span id="stars">☆☆☆☆☆</span></div>
+  </div>
+  <div id="objective" class="panel">Tekan M untuk memulai misi</div>
+  <div id="dialog" style="opacity:0"></div>
+  <div id="toast"></div>
+  <div id="speed"></div>
+  <div id="weapon" class="panel">TANGAN KOSONG</div>
+  <div id="minimap-wrap"><canvas id="minimap" width="180" height="180"></canvas></div>
+  <div id="crosshair"></div>
+  <div id="controls-hint">WASD jalan/nyetir · Mouse kamera · E masuk/keluar mobil · F pukul · Klik tembak · R isi peluru · 1/2 senjata · M misi · P jeda</div>
+</div>
+<div id="start-screen" class="overlay">
+  <h1>VICE SUNSET</h1>
+  <h2>SOLMAR BAY</h2>
+  <p>Selamat datang di Solmar Bay — kota pantai yang tak pernah tidur. Kau <b>Kai</b>, pendatang baru
+  yang butuh uang cepat. Rico punya kerjaan untukmu: antar paket, kejar target, dan kabur dari polisi.
+  Kota ini milik siapa yang paling berani.</p>
+  <p class="keys">WASD — jalan / menyetir &nbsp;·&nbsp; Mouse — kamera &nbsp;·&nbsp; E — masuk / keluar mobil (curi mobil!)<br>
+  Klik kiri — tembak &nbsp;·&nbsp; F — pukul &nbsp;·&nbsp; R — isi peluru &nbsp;·&nbsp; 1 / 2 — ganti senjata<br>
+  Shift — lari &nbsp;·&nbsp; Spasi — rem tangan &nbsp;·&nbsp; M — misi &nbsp;·&nbsp; P / Esc — jeda</p>
+  <button id="start-btn" class="big-btn">MULAI</button>
+  <p style="font-size:12px;color:#9a8ab0;margin-top:16px">Game orisinal — semua kota, karakter, dan cerita dibuat sendiri. Bukan GTA, bukan Rockstar.</p>
+</div>
+<div id="pause-screen" class="overlay">
+  <h1>JEDA</h1>
+  <p>Progres tersimpan otomatis.</p>
+  <button id="resume-btn" class="big-btn">LANJUTKAN</button>
+</div>
+<div id="wasted-screen" class="overlay">
+  <h1>WASTED</h1>
+  <p id="wasted-text">Kau tumbang di jalanan Solmar Bay. -$50 biaya rumah sakit.</p>
+  <button id="respawn-btn" class="big-btn">BANGKIT LAGI</button>
+</div>
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>
